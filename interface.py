@@ -12,8 +12,7 @@ import psycopg2
 Ui_WindowLogin, QLogIn = uic.loadUiType('login.ui')
 Ui_MainWindow, QMainWindow = uic.loadUiType('mainwindow.ui')
 Ui_WindowRegistration, QRegistration = uic.loadUiType('registration.ui')
-Ui_WindowTicket,QTicket=uic.loadUiType('ticket.ui')
-
+Ui_WindowTicket, QTicket = uic.loadUiType('ticket.ui')
 
 
 class LogInWindow(QLogIn):
@@ -32,6 +31,7 @@ class LogInWindow(QLogIn):
             lambda: self.parent().replace_with(RegistrationWindow())
         )
         self.ui.sign_in_button.clicked.connect(self.__execute_login)
+
 
     def __del__(self):
         self.cursor.close()
@@ -52,12 +52,19 @@ class LogInWindow(QLogIn):
             login = self.ui.line_login.text()
             password = self.ui.line_password.text()
 
-            self.cursor.execute("SELECT user_id from users WHERE login=%s AND password=%s",
-                                (login, password))
-            user_id = self.cursor.fetchone()
-            if not user_id:
+            self.cursor.execute(
+                """SELECT user_id, name , login , surname, passport_num, 
+                  phone_number, status, password 
+                  from users WHERE login=%s AND password=%s""",
+                (login, password))
+            user = self.cursor.fetchone()
+            if not user:
                 self.showMessageBox('Warning', 'Invalid Username And Password')
                 raise Exception("USER NOT EXISTS")
+
+            # creat instance of user in current session
+            Current_User.set(user)
+
 
             # переход в новое окно
 
@@ -91,13 +98,20 @@ class RegistrationWindow(QRegistration):
             passport = self.ui.line_passport.text()
             login = self.ui.line_login.text()
             password = self.ui.line_password.text()
+
             self.cursor.execute(
                 "INSERT INTO users (name, surname,passport_num,login,password) VALUES (%s,%s,%s,%s,%s)",
                 (name, surname, passport, login, password))
             self.connect.commit()
 
-        # переход в новое окно
+            # creat instance of user in current session
+            self.cursor.execute("SELECT user_id from users WHERE passport_num=%s", (passport,))
+            user_id = self.cursor.fetchone()
+            user = (user_id, name, surname, login, "user", passport, None, password)
+            Current_User.set(user)
+            # end of creating
 
+        # переход в новое окно
         except Exception as e:
             self.connect.rollback()
             print(e)
@@ -132,7 +146,7 @@ class TicketWindow(QTicket):
 
         # здесь нужно добавить вывод инфы о билетах
         # self.cursor.execute("")
-        ticketTable=self.ui.label
+        ticketTable = self.ui.label
         ticketTable.setText("kamlsdm")
 
     def __del__(self):
@@ -141,30 +155,30 @@ class TicketWindow(QTicket):
 
 class User():
     def __init__(self):
-        self.user_id=0
-        self.name=""
-        self.surname=""
-        self.login=""
-        self.status="user"
-        self.passport_num=""
-        self.phone_number=""
-        self.password=""
+        self.user_id = 0
+        self.name = ""
+        self.surname = ""
+        self.login = ""
+        self.status = "user"
+        self.passport_num = ""
+        self.phone_number = ""
+        self.password = ""
 
-    def set(self,id=0,name="",surnam="",login="",status="",passport="", phone_number="",password=""):
-        self.user_id = id
-        self.name = name
-        self.surname = surnam
-        self.login = login
-        self.status = status
-        self.passport_num = passport
-        self.phone_number = phone_number
-        self.password = password
+    def set(self, user=(0, "", "", "", "user", "", "", "")):
+        self.user_id = user[0]
+        self.name = user[1]
+        self.surname = user[2]
+        self.login = user[3]
+        self.status = user[4]
+        self.passport_num = user[5]
+        self.phone_number = user[6]
+        self.password = user[7]
 
 
 if __name__ == '__main__':
-
     # пользователь в сессии
-    global User
+    global Current_User
+    Current_User= User()
 
     app = QApplication(sys.argv)
     # создаем окно
