@@ -13,6 +13,7 @@ Ui_WindowLogin, QLogIn = uic.loadUiType('login.ui')
 Ui_MainWindow, QMainWindow = uic.loadUiType('mainwindow.ui')
 Ui_WindowRegistration, QRegistration = uic.loadUiType('registration.ui')
 Ui_WindowTicket, QTicket = uic.loadUiType('ticket.ui')
+Ui_WindowChangeInfo, QChangeInfo = uic.loadUiType('changeinfo.ui')
 
 
 class LogInWindow(QLogIn):
@@ -31,7 +32,6 @@ class LogInWindow(QLogIn):
             lambda: self.parent().replace_with(RegistrationWindow())
         )
         self.ui.sign_in_button.clicked.connect(self.__execute_login)
-
 
     def __del__(self):
         self.cursor.close()
@@ -53,8 +53,8 @@ class LogInWindow(QLogIn):
             password = self.ui.line_password.text()
 
             self.cursor.execute(
-                """SELECT user_id, name , login , surname, passport_num, 
-                  phone_number, status, password 
+                """SELECT user_id, name ,surname, login , status, passport_num, 
+                  phone_number,password 
                   from users WHERE login=%s AND password=%s""",
                 (login, password))
             user = self.cursor.fetchone()
@@ -136,18 +136,74 @@ class MainWindow(QMainWindow):
         self.ui = None
 
 
+class ChangeInfoWindow(QChangeInfo):
+    def __init__(self,parent=None):
+        QChangeInfo.__init__(self,parent)
+        self.ui= Ui_WindowChangeInfo()
+        self.ui.setupUi(self)
+        self.connect = psycopg2.connect(database='db_project', user='kirill', host='localhost', password='25112458')
+        self.cursor = self.connect.cursor()
+
+        self.ui.nameLine.setText(Current_User.name)
+        self.ui.surnameLine.setText(Current_User.surname)
+        self.ui.passporLine.setText(Current_User.passport_num)
+        self.ui.phoneLine.setText(Current_User.phone_number)
+        self.ui.loginLine.setText(Current_User.login)
+        self.ui.passwordLine.setText(Current_User.password)
+
+        self.ui.buttonDone.clicked.connect()
+
+    # saves new information about user, checks it for validity
+    def saveInfo(self):
+        newName = self.ui.nameLine.text()
+
+
+
 class TicketWindow(QTicket):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, ticket_id=1):
+        # ticket_id needs for display appropriate ticket
+        self.ticket_id = ticket_id
+
         QTicket.__init__(self, parent)
         self.ui = Ui_WindowTicket()
         self.ui.setupUi(self)
         self.connect = psycopg2.connect(database='db_project', user='kirill', host='localhost', password='25112458')
         self.cursor = self.connect.cursor()
 
-        # здесь нужно добавить вывод инфы о билетах
-        # self.cursor.execute("")
-        ticketTable = self.ui.label
-        ticketTable.setText("kamlsdm")
+        # getting info about ticket from db
+        self.cursor.execute("""SELECT flight_id, plane_id, seat_id, tariff_id FROM tickets WHERE ticket_id=%s""",
+                            (self.ticket_id,))
+        ticket = self.cursor.fetchone()
+        # здесь нужно добавить rowFactory в перспективе
+        self.cursor.execute("""SELECT departure, destination FROM flights WHERE flight_id = %s""", (ticket[0],))
+        flightDirection = self.cursor.fetchone()
+        self.cursor.execute("""SELECT company FROM planes WHERE plane_id=%s""", (ticket[1],))
+        airline = self.cursor.fetchone()
+        self.cursor.execute("""SELECT price, large_luggage FROM tariff WHERE tariff_id = %s""", (ticket[3],))
+        tariff = self.cursor.fetchone()
+
+        # putting info into window
+        outDeparture = self.ui.departure
+        outDeparture.setText(flightDirection[0])
+
+        outDestination = self.ui.destination
+        outDestination.setText(flightDirection[1])
+
+        outAirline = self.ui.airline
+        outAirline.setText(airline[0])
+
+        outSeat = self.ui.seat
+        outSeat.setText(str(ticket[2]))
+
+        outPrice = self.ui.price
+        outPrice.setText(str(tariff[0]))
+
+        outLuggage = self.ui.lagguge
+        outLuggage.setText("Услуга куплена" if tariff[1] else "Услуга не куплена")
+
+        # self.ui.pushButtonOk.clicked.connect(
+        #     lambda: self.parent().replace_with(ProfileWindow())
+        # )
 
     def __del__(self):
         self.ui = None
@@ -178,17 +234,17 @@ class User():
 if __name__ == '__main__':
     # пользователь в сессии
     global Current_User
-    Current_User= User()
+    Current_User = User()
 
     app = QApplication(sys.argv)
     # создаем окно
-    w = MainWindow()
-    w.setWindowTitle("Main window")
-    w.show()
-
-    # w=TicketWindow()
-    # w.setWindowTitle("ajksnd")
+    # w = MainWindow()
+    # w.setWindowTitle("Main window")
     # w.show()
+
+    w = TicketWindow()
+    w.setWindowTitle("ajksnd")
+    w.show()
 
     # enter tha main loop
     sys.exit(app.exec_())
