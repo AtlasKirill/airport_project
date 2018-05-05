@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>451</width>
-    <height>325</height>
+    <width>490</width>
+    <height>368</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -103,7 +103,7 @@
     </rect>
    </property>
    <property name="text">
-    <string>SIGN IN</string>
+    <string>LOG IN</string>
    </property>
   </widget>
   <widget class="QPushButton" name="sign_up_button">
