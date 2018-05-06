@@ -37,9 +37,6 @@ class LogInWindow(QLogIn):
 
         self.ui = Ui_WindowLogin()
         self.ui.setupUi(self)
-        # query_Text - здесь название поля из названия элементов в qtcreator
-        self.ui.line_login.setText("email, например")
-        self.ui.line_password.setText("Ваш пароль")
 
         self.ui.sign_up_button.clicked.connect(
             lambda: self.parent().replace_with(RegistrationWindow())
@@ -82,8 +79,11 @@ class LogInWindow(QLogIn):
 
     # обработка нажатия на "enter"
     def keyPressEvent(self, event):
-        if event.key() == Qt.Key_Return and self.ui.line_login.hasFocus() \
-                and self.ui.line_password.hasFocus():
+        if self.ui.line_login.text()=="":
+            return
+        if self.ui.line_password.text()!="":
+            return
+        if event.key() == Qt.Key_Return:
             self.__execute_login()
 
 
@@ -180,8 +180,6 @@ class MainWindow(QMainWindow):
         self.ui.main_layout.addWidget(self.current_widget)
 
     def replace_with(self, new_widget):
-        print(str(new_widget))
-        print(str(self.current_widget))
         self.ui.main_layout.replaceWidget(self.current_widget, new_widget)
         self.current_widget.setParent(None)
         self.current_widget = new_widget
