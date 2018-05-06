@@ -14,8 +14,8 @@ CREATE TABLE IF NOT EXISTS planes (
 );
 
 CREATE TABLE IF NOT EXISTS seats (
-  seat_id  SERIAL PRIMARY KEY,
-  plane_id INTEGER REFERENCES planes (plane_id),
+  seat_id                SERIAL PRIMARY KEY,
+  plane_id               INTEGER REFERENCES planes (plane_id),
   serial_number_in_plane INTEGER
 );
 
@@ -60,20 +60,6 @@ CREATE INDEX idx_flight_depart
   ON flights (departure, destination);
 
 
-CREATE OR REPLACE FUNCTION api_test6()
-  RETURNS
-  SETOF USERS AS $$
-BEGIN
-  RETURN QUERY SELECT *
-               FROM users;
-END;
-$$
-LANGUAGE plpgsql;
-
-SELECT *
-FROM api_test6();
-
-
 -- User registration
 CREATE OR REPLACE FUNCTION registration(name    VARCHAR, login VARCHAR, password VARCHAR,
                                         surname VARCHAR, passport VARCHAR, phone VARCHAR DEFAULT '',
@@ -90,7 +76,7 @@ BEGIN
   THEN RETURN TRUE;
   ELSE RETURN FALSE;
   END IF;
-END;
+END
 $$
 LANGUAGE plpgsql;
 
@@ -100,18 +86,57 @@ FROM registration('vasya', 'asdmlld@.com', '21313', 'ivanov', 'en234', '+728499'
 
 -- User Authorization
 CREATE OR REPLACE FUNCTION authrorization(in_user_id INTEGER, OUT authorized BOOLEAN, OUT status VARCHAR) AS $$
+DECLARE
 BEGIN
-  authorized= EXISTS(SELECT *
-                FROM users
-                WHERE user_id = in_user_id);
+  authorized = EXISTS(SELECT *
+                      FROM users
+                      WHERE user_id = in_user_id);
   status = (SELECT users.status
-          FROM users
-          WHERE user_id = in_user_id);
-END;
+            FROM users
+            WHERE user_id = in_user_id);
+END
 $$
 LANGUAGE plpgsql;
 
-SELECT *FROM authrorization(40);
+SELECT *
+FROM authrorization(40);
+SELECT *
+FROM authrorization(30);
+
+
+-- Adding new flight
+CREATE OR REPLACE FUNCTION new_flight(in_user_id       INTEGER,
+                                      depart           VARCHAR,
+                                      dest             VARCHAR,
+                                      date             TIMESTAMP WITH TIME ZONE,
+  OUT                                 operation_status BOOLEAN,
+  OUT                                 flight           INTEGER)
+AS $$
+BEGIN
+  IF (SELECT status
+      FROM users
+      WHERE user_id = in_user_id) != 'admin'
+  THEN RAISE EXCEPTION 'Exception:wrong permissions for this user';
+  ELSE
+    INSERT INTO flights (departure, destination, flight_date) VALUES (depart, dest, date)
+    RETURNING flights.flight_id
+      INTO flight;
+  END IF;
+  operation_status = TRUE;
+END
+$$
+LANGUAGE plpgsql;
+
+SELECT *
+FROM new_flight(3, 'Москва', 'Владивосток', now() :: DATE + INTEGER '3'+interval'16 hour');
+
+SELECT *
+FROM new_flight(30, 'Москва', 'Владивосток', now() :: DATE + INTEGER '3'+interval'16 hour');
+
+
+
+--
+
 
 
 
