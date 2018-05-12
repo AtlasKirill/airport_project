@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# goi to
+# heeeellllooo
 # work with windows
 import sys
 
@@ -297,7 +297,9 @@ class TicketWindow(QTicket):
         self.ui.returnTicket.clicked.connect(self.returnTick)
 
     def returnTick(self):
-        self.cursor.execute("""DELETE FROM tickets WHERE ticket_id = %s""", (Current_Ticket.ticket_id,))
+        # self.cursor.execute("""DELETE FROM tickets WHERE ticket_id = %s""", (Current_Ticket.ticket_id,))
+        print(Current_User.user_id)
+        self.cursor.execute("""SELECT * FROM return_ticket(%s,%s)""",(Current_Ticket.ticket_id,Current_User.user_id))
         self.connect.commit()
         self.parent().replace_with(ProfileWindow())
 
