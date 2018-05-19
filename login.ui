@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>497</width>
-    <height>283</height>
+    <width>545</width>
+    <height>308</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -29,21 +29,6 @@
       </size>
      </property>
     </spacer>
-   </item>
-   <item row="1" column="0">
-    <widget class="QLabel" name="label">
-     <property name="font">
-      <font>
-       <pointsize>18</pointsize>
-      </font>
-     </property>
-     <property name="text">
-      <string>Login</string>
-     </property>
-     <property name="alignment">
-      <set>Qt::AlignCenter</set>
-     </property>
-    </widget>
    </item>
    <item row="2" column="0">
     <layout class="QGridLayout" name="gridLayout">
@@ -124,8 +109,31 @@
      </property>
     </spacer>
    </item>
+   <item row="1" column="0">
+    <widget class="QLabel" name="label">
+     <property name="font">
+      <font>
+       <pointsize>15</pointsize>
+       <weight>75</weight>
+       <bold>true</bold>
+      </font>
+     </property>
+     <property name="text">
+      <string>Login</string>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignCenter</set>
+     </property>
+    </widget>
+   </item>
   </layout>
  </widget>
+ <tabstops>
+  <tabstop>line_login</tabstop>
+  <tabstop>line_password</tabstop>
+  <tabstop>sign_in_button</tabstop>
+  <tabstop>sign_up_button</tabstop>
+ </tabstops>
  <resources/>
  <connections/>
 </ui>
