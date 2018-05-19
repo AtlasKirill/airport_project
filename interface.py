@@ -106,9 +106,6 @@ class ProfileWindow(QProfile):
         self.ui.label_phone.setText(Current_User.phone_number if Current_User.phone_number != "" else "[No data]")
 
         # combobox: watch a list of bought tickets
-        # ConnectionDB.cursor.execute("SELECT ticket_id from tickets WHERE user_id=%s", (Current_User.user_id,))
-        # tickets = ConnectionDB.cursor.fetchall()
-        # for ticket in result:
         ConnectionDB.cursor.execute(
             """SELECT ticket_id, departure,destination FROM flights LEFT JOIN tickets USING (flight_id) WHERE user_id=%s""",
             (Current_User.user_id,))
@@ -370,7 +367,7 @@ class BuyTicketWindow(QBuyTicket):
             self.ui.comboBox_departure.addItem(str(departure[0]))
         self.ui.comboBox_departure.setCurrentIndex(0)
         Ticket_tb.departure = result[0][0]
-        self.ui.comboBox_departure.activated[str].connect(self.change_departure_vars)
+        self.ui.comboBox_departure.activated[str].connect(Ticket_tb.set_departure)
 
         ConnectionDB.cursor.execute("SELECT DISTINCT destination from flights")
         result = ConnectionDB.cursor.fetchall()
@@ -378,11 +375,11 @@ class BuyTicketWindow(QBuyTicket):
             self.ui.comboBox_destination.addItem(str(destination[0]))
         self.ui.comboBox_destination.setCurrentIndex(0)
         Ticket_tb.destination = result[0][0]
-        self.ui.comboBox_destination.activated[str].connect(self.change_destination_vars)
+        self.ui.comboBox_destination.activated[str].connect(Ticket_tb.set_destination)
 
         # add options
-        self.ui.checkBox_luggage.toggled.connect(self.set_flags)
-        self.ui.checkBox_food.toggled.connect(self.set_flags)
+        self.ui.checkBox_luggage.toggled.connect(self.set_tariff)
+        self.ui.checkBox_food.toggled.connect(self.set_tariff)
 
         # list of seats id
         self.seats_id = []
@@ -394,14 +391,16 @@ class BuyTicketWindow(QBuyTicket):
         # list of time
         self.ui.listWidget_times.itemClicked.connect(self.set_flightId_by_time)
 
-    def set_flags(self):
+    def set_tariff(self):
         self.luggage_flag = self.ui.checkBox_luggage.checkState()
         self.food_flag = self.ui.checkBox_food.checkState()
 
     def search_time(self, date_):
+        if len(self.time_list):
+            self.time_list = self.time_list.clear()
+            self.time_list = []
+        self.ui.listWidget_times.clear()
         Ticket_tb.set_date(date_)
-        print((Ticket_tb.departure, Ticket_tb.destination, Ticket_tb.year, Ticket_tb.month,
-               Ticket_tb.day))
         ConnectionDB.cursor.execute("""SELECT * from current_time_by_flightDate (%s,%s,%s,%s,%s)""",
                                     (Ticket_tb.departure, Ticket_tb.destination, Ticket_tb.year, Ticket_tb.month,
                                      Ticket_tb.day))
@@ -409,7 +408,6 @@ class BuyTicketWindow(QBuyTicket):
         # если ответ пустой -- ответная реакция
         result = ConnectionDB.cursor.fetchall()
         for time_info in result:
-            print(time_info)
             # time_info[0] ---- flight_id
             self.time_list.append(time_info[0])
             self.ui.listWidget_times.addItem(str(int(time_info[1])) + ":" + str(int(time_info[2])))
@@ -427,52 +425,37 @@ class BuyTicketWindow(QBuyTicket):
             else:
                 self.seats_id.clear()
                 ConnectionDB.cursor.execute(
-                    """SELECT * from list_of_free_seats(SELECT plane_id FROM planes WHERE flight_id = %s)""",
+                    """SELECT * from list_of_free_seats((SELECT flight_id FROM planes WHERE flight_id=%s))""",
                     (Ticket_tb.flight_id,))
-                for seats in ConnectionDB.cursor.fetchall():
+                self.ui.listWidget_seats.clear()
+                result = ConnectionDB.cursor.fetchall()
+                for seats in result:
                     self.seats_id.append(seats[0])
-                    self.ui.listWidget_seats.addItem(seats[1])
+                    self.ui.listWidget_seats.addItem(str(seats[1]))
 
     def set_seat(self):
         Ticket_tb.seat_id = self.seats_id[self.ui.listWidget_seats.currentRow()]
-        # elif self.time_is_selected == 1:
+        self.ui.buyButton.clicked.connect(self.buyTicket)
 
-        # self.cursor.execute(
-        #    """SELECT flight_id, flight_date from flights
-        #       WHERE departure=%s and destination=%s and flight_date=%s""", (Ticket_tb.departure, Ticket_tb.destination, Ticket_tb.date))
-        # result = self.cursor.fetchall()
-        # if len(result) == 0:
-        #    ErrorMessage("Warning", "No tickets")
-        # for flight_info_ in result:
-        #    date = str(flight_info_[1])
-        # date = re.sub(r'.* ', '', str(flight_info_[1]))
-        # date = re.sub(r'\..*', '', date)
-        #     self.ui.listWidget_times.addItem(date)
-        #            self.cursor.execute(
-        #                """SELECT * from planes
-        #                   WHERE flight_id = %s""", (flight_info_[0][0],))
-        #            for flight_info in self.cursor.fetchall():
-        #                Ticket_tb.plane_id = flight_info[0]
-        #                Ticket_tb.seats_num = flight_info[1]
-        #                Ticket_tb.company = flight_info[2]
+    def buyTicket(self):
 
-        # self.cursor.execute(
-        #    """select tariff_id, price from tariff
-        #        where large_luggage=%s and food=%s""", (Ticket_tb.luggage, Ticket_tb.food))
-        # for tariff_info in self.cursor.fetchall():
-        #    Ticket_tb.tariff_id = tariff_info[0]
-        #    Ticket_tb.price = tariff_info[1]
+        try:
+            ConnectionDB.cursor.execute(
+                """SELECT * FROM buy_ticket (%s,%s,(SELECT plane_id FROM planes WHERE flight_id = %s),%s,(SELECT tariff_id FROM tariff WHERE large_luggage = %s AND food = %s))""",(
+                    Current_User.user_id, Ticket_tb.flight_id, Ticket_tb.flight_id, Ticket_tb.seat_id,
+                    self.luggage_flag, self.food_flag))
+            ConnectionDB.connect.commit()
+        except Exception as e:
+            ConnectionDB.connect.rollback()
+            print(e)
+
+        self.ui.buyButton.clicked.disconnect()
+        self.parent().replace_with(ProfileWindow())
 
     def _update(self):
         time = QTime.currentTime().toString()
         time = time[0:-3]
         self.ui.lcdNumber.display(time)
-
-    def change_departure_vars(self, text):
-        Ticket_tb.set_departure(text)
-
-    def change_destination_vars(self, text):
-        Ticket_tb.set_destination(text)
 
 
 class AdminWindow(QAdmin):
@@ -550,7 +533,6 @@ class AdminWindow(QAdmin):
         date_in_seconds = date.toTime_t()
         new_flight_id = None
         try:
-            # проблема : попадаем сюда дважды для одних и тех же данных
             ConnectionDB.cursor.execute(
                 """SELECT * FROM new_flight(%s,%s,%s,(SELECT TIMESTAMP 'epoch' + %s * INTERVAL '1 second'))""",
                 (Current_User.user_id, dep, dest, date_in_seconds))
