@@ -6,6 +6,7 @@ import sys
 import linecache
 
 from PyQt5.QtCore import Qt, QDateTime, QDate, QTimer, QTime
+from PyQt5.QtGui import QPalette, QImage, QBrush
 from PyQt5.QtWidgets import QApplication, QMessageBox, QTabWidget
 from PyQt5 import uic
 import psycopg2
@@ -184,6 +185,13 @@ class MainWindow(QMainWindow):
         QMainWindow.__init__(self, parent)
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
+
+        palette = QPalette()
+        img = QImage('color.jpg')
+        scaled = img.scaled(self.size(), Qt.KeepAspectRatioByExpanding, transformMode=Qt.SmoothTransformation)
+        palette.setBrush(QPalette.Window, QBrush(scaled))
+        self.setPalette(palette)
+        # self.show()
 
         # переходим на окно log in
         self.current_widget = LogInWindow()
@@ -465,28 +473,71 @@ class AdminWindow(QAdmin):
         self.ui = Ui_Admin()
         self.ui.setupUi(self)
 
-        self.user_field_fill()
+        # lists for Qlistwidget
+        self.flight_ids = []
+        self.ticket_ids = []
+        self.user_ids = []
+
+        self.userField_fill()
         self.flight_field_fill()
 
-        # self.ui.user_field.itemDoubleClicked.connect(self.user_profile)
+        # user admin mode
+        self.ui.userField.itemClicked.connect(self.ticket_userInfo_Field_fill)
+        # self.ui.ticketField.itemClicked.connect(self.infoTabs)
+        # user admin mode
+
+        # flight admin mode
         self.ui.flight_field.itemClicked.connect(self.flight_show_in_lineEdit)
         self.ui.addButton.clicked.connect(self.addFlightButton)
         self.ui.delButton.clicked.connect(self.delButton)
         self.ui.buttonEdit.clicked.connect(self.flight_edit)
         self.ui.backButton.clicked.connect(lambda: self.parent().replace_with(LogInWindow()))
         self.ui.adminLogin.setText("You are: " + str(Current_User.login))
+        # flight admin mode
 
-    def user_field_fill(self):
+
+    def userField_fill(self):
+        self.user_ids.clear()
         try:
-            ConnectionDB.cursor.execute("""SELECT name || ' ' || surname, user_id FROM users""")
+            ConnectionDB.cursor.execute("""SELECT name,surname, user_id FROM users ORDER BY name ASC, surname ASC""")
             for user in ConnectionDB.cursor.fetchall():
-                self.ui.userField.addItem(str(user[0]) + " (user id = " + str(user[1]) + ")")
+                self.ui.userField.addItem(str(user[0]) + " "+str(user[1]))
+                self.user_ids.append(user[2])
         except Exception as e:
             ConnectionDB.connect.rollback()
             print(e)
 
+    def ticket_userInfo_Field_fill(self):
+        Current_User.user_id = self.user_ids[self.ui.userField.currentRow()]
+        self.ticket_ids.clear()
+        self.ui.ticketField.clear()
+        try:
+            ConnectionDB.cursor.execute("""SELECT ticket_id FROM tickets WHERE user_id = %s""",(Current_User.user_id,))
+            for ticket in ConnectionDB.cursor.fetchall():
+                self.ui.ticketField.addItem(str(ticket[0]))
+                self.ticket_ids.append(ticket[0])
+
+            self.ui.userInfo.clear()
+            ConnectionDB.cursor.execute(
+                """SELECT name,surname,passport_num, login, phone_number FROM users WHERE user_id = %s""",
+                (Current_User.user_id,))
+            params = ['name: ', 'surname: ', 'passport: ', 'login: ', 'phone: ']
+            for result in zip(ConnectionDB.cursor.fetchone(), params):
+                self.ui.userInfo.addItem(str(result[1]) + str(result[0]))
+
+        except Exception as e:
+            ConnectionDB.connect.rollback()
+            print(e)
+
+    # def infoTabs(self):
+    #     try:
+    #         ConnectionDB.cursor.execute("""SELECT * FROM """)
+    #     except Exception as e:
+    #         ConnectionDB.connect.rollback()
+    #         print(e)
+
+
     def flight_field_fill(self):
-        self.flight_ids = []
         try:
             ConnectionDB.cursor.execute("""SELECT departure, destination, flight_id FROM flights""")
             for flight in ConnectionDB.cursor.fetchall():
@@ -565,21 +616,6 @@ class AdminWindow(QAdmin):
 
         self.ui.flight_field.itemClicked.connect(self.flight_show_in_lineEdit)
         self.ui.buttonEdit.setText("Edit")
-
-    # def user_profile(self):
-    #     selected_item = self.ui.user_field.currentItem()
-    #     user_id = int(re.findall('\d+', selected_item.text())[0])
-    #     try:
-    #         self.cursor.execute(
-    #             """SELECT user_id, name ,surname, login , status, passport_num,
-    #               phone_number,password
-    #               from users WHERE user_id=%s""", (user_id,))
-    #         user = self.cursor.fetchone()
-    #         Current_User.set(user)
-    #     except Exception as e:
-    #         self.connect.rollback()
-    #         print(e)
-    #     self.parent().replace_with(ProfileWindow())
 
     def flight_edit(self):
         self.ui.buttonEdit.setText("Edit")
