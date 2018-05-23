@@ -12,14 +12,14 @@ from PyQt5 import uic
 import psycopg2
 import re
 
-Ui_WindowLogin, QLogIn = uic.loadUiType('login.ui')
-Ui_MainWindow, QMainWindow = uic.loadUiType('mainwindow.ui')
-Ui_WindowRegistration, QRegistration = uic.loadUiType('registration.ui')
-Ui_WindowTicket, QTicket = uic.loadUiType('ticket.ui')
-Ui_WindowChangeInfo, QChangeInfo = uic.loadUiType('changeinfo.ui')
-Ui_Profile, QProfile = uic.loadUiType('profile.ui')
-Ui_Admin, QAdmin = uic.loadUiType('adminwindow.ui')
-Ui_WindowBuyTicket, QBuyTicket = uic.loadUiType('buyticket.ui')
+Ui_WindowLogin, QLogIn = uic.loadUiType('windows/login.ui')
+Ui_MainWindow, QMainWindow = uic.loadUiType('windows/mainwindow.ui')
+Ui_WindowRegistration, QRegistration = uic.loadUiType('windows/registration.ui')
+Ui_WindowTicket, QTicket = uic.loadUiType('windows/ticket.ui')
+Ui_WindowChangeInfo, QChangeInfo = uic.loadUiType('windows/changeinfo.ui')
+Ui_Profile, QProfile = uic.loadUiType('windows/profile.ui')
+Ui_Admin, QAdmin = uic.loadUiType('windows/adminwindow.ui')
+Ui_WindowBuyTicket, QBuyTicket = uic.loadUiType('windows/buyticket.ui')
 
 
 class ErrorMessage:
@@ -52,7 +52,6 @@ class LogInWindow(QLogIn):
         try:
             login = self.ui.line_login.text()
             password = self.ui.line_password.text()
-
             ConnectionDB.cursor.execute(
                 """SELECT user_id, name ,surname, login , status, passport_num, 
                   phone_number,password 
@@ -75,7 +74,6 @@ class LogInWindow(QLogIn):
         # except Exception as e:
         except:
             ConnectionDB.connect.rollback()
-            # print(e)
             PrintException()
 
     # обработка нажатия на "enter"
@@ -187,7 +185,7 @@ class MainWindow(QMainWindow):
         self.ui.setupUi(self)
 
         palette = QPalette()
-        img = QImage('color.jpg')
+        img = QImage('windows/color.jpg')
         scaled = img.scaled(self.size(), Qt.KeepAspectRatioByExpanding, transformMode=Qt.SmoothTransformation)
         palette.setBrush(QPalette.Window, QBrush(scaled))
         self.setPalette(palette)
@@ -360,9 +358,9 @@ class BuyTicketWindow(QBuyTicket):
         self.ui.listWidget_seats.itemClicked.connect(self.set_seat)
 
         # digital clock
-        # self.timer = QTimer()
-        # self.timer.timeout.connect(self._update)
-        # self.timer.start(1000)
+        self.timer = QTimer()
+        self.timer.timeout.connect(self._update)
+        self.timer.start(1000)
         # date
         date = QDateTime.currentDateTime().toString()
         date = re.sub(r'..:.*', '', date)
@@ -400,8 +398,14 @@ class BuyTicketWindow(QBuyTicket):
         self.ui.listWidget_times.itemClicked.connect(self.set_flightId_by_time)
 
     def set_tariff(self):
-        self.luggage_flag = self.ui.checkBox_luggage.checkState()
-        self.food_flag = self.ui.checkBox_food.checkState()
+        if (self.ui.checkBox_luggage.checkState()):
+            self.luggage_flag = True
+        else:
+            self.luggage_flag = False
+        if (self.ui.checkBox_food.checkState()):
+            self.food_flag = True
+        else:
+            self.food_flag = False
 
     def search_time(self, date_):
         if len(self.time_list):
@@ -449,7 +453,8 @@ class BuyTicketWindow(QBuyTicket):
 
         try:
             ConnectionDB.cursor.execute(
-                """SELECT * FROM buy_ticket (%s,%s,(SELECT plane_id FROM planes WHERE flight_id = %s),%s,(SELECT tariff_id FROM tariff WHERE large_luggage = %s AND food = %s))""",(
+                """SELECT * FROM buy_ticket (%s,%s,(SELECT plane_id FROM planes WHERE flight_id = %s),%s,(SELECT tariff_id FROM tariff WHERE large_luggage = %s AND food = %s))""",
+                (
                     Current_User.user_id, Ticket_tb.flight_id, Ticket_tb.flight_id, Ticket_tb.seat_id,
                     self.luggage_flag, self.food_flag))
             ConnectionDB.connect.commit()
@@ -480,10 +485,11 @@ class AdminWindow(QAdmin):
 
         self.userField_fill()
         self.flight_field_fill()
+        self.planeField_fill()
 
         # user admin mode
         self.ui.userField.itemClicked.connect(self.ticket_userInfo_Field_fill)
-        # self.ui.ticketField.itemClicked.connect(self.infoTabs)
+        self.ui.ticketField.itemClicked.connect(self.infoTabs)
         # user admin mode
 
         # flight admin mode
@@ -495,13 +501,11 @@ class AdminWindow(QAdmin):
         self.ui.adminLogin.setText("You are: " + str(Current_User.login))
         # flight admin mode
 
-
     def userField_fill(self):
-        self.user_ids.clear()
         try:
             ConnectionDB.cursor.execute("""SELECT name,surname, user_id FROM users ORDER BY name ASC, surname ASC""")
             for user in ConnectionDB.cursor.fetchall():
-                self.ui.userField.addItem(str(user[0]) + " "+str(user[1]))
+                self.ui.userField.addItem(str(user[0]) + " " + str(user[1]))
                 self.user_ids.append(user[2])
         except Exception as e:
             ConnectionDB.connect.rollback()
@@ -512,30 +516,40 @@ class AdminWindow(QAdmin):
         self.ticket_ids.clear()
         self.ui.ticketField.clear()
         try:
-            ConnectionDB.cursor.execute("""SELECT ticket_id FROM tickets WHERE user_id = %s""",(Current_User.user_id,))
+            ConnectionDB.cursor.execute(
+                """SELECT serial_number_in_plane, ticket_id FROM tickets INNER JOIN seats USING (seat_id) WHERE user_id = %s""",
+                (Current_User.user_id,))
             for ticket in ConnectionDB.cursor.fetchall():
                 self.ui.ticketField.addItem(str(ticket[0]))
-                self.ticket_ids.append(ticket[0])
+                self.ticket_ids.append(ticket[1])
 
+            # filling user info list
             self.ui.userInfo.clear()
+            self.ui.ticketInfo.clear()
             ConnectionDB.cursor.execute(
                 """SELECT name,surname,passport_num, login, phone_number FROM users WHERE user_id = %s""",
                 (Current_User.user_id,))
             params = ['name: ', 'surname: ', 'passport: ', 'login: ', 'phone: ']
-            for result in zip(ConnectionDB.cursor.fetchone(), params):
-                self.ui.userInfo.addItem(str(result[1]) + str(result[0]))
-
+            for result in zip(params, ConnectionDB.cursor.fetchone()):
+                self.ui.userInfo.addItem(str(result[0]) + str(result[1]))
         except Exception as e:
             ConnectionDB.connect.rollback()
             print(e)
 
-    # def infoTabs(self):
-    #     try:
-    #         ConnectionDB.cursor.execute("""SELECT * FROM """)
-    #     except Exception as e:
-    #         ConnectionDB.connect.rollback()
-    #         print(e)
-
+    def infoTabs(self):
+        try:
+            # filling ticket info list
+            self.ui.ticketInfo.clear()
+            Current_Ticket.ticket_id = self.ticket_ids[self.ui.ticketField.currentRow()]
+            ConnectionDB.cursor.execute(
+                """SELECT direction, date, seat_num, plane_company, food_and_luggage FROM info_from_ticket(%s)""",
+                (Current_Ticket.ticket_id,))
+            params = ['direction: ', 'date: ','seat: ', 'Air company: ', 'food/luggage: ']
+            for result in zip(params, ConnectionDB.cursor.fetchone()):
+                self.ui.ticketInfo.addItem(str(result[0]) + str(result[1]))
+        except Exception as e:
+            ConnectionDB.connect.rollback()
+            print(e)
 
     def flight_field_fill(self):
         try:

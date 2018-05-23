@@ -36,7 +36,7 @@
    <item row="1" column="0">
     <widget class="QPushButton" name="button_back">
      <property name="text">
-      <string>BACK</string>
+      <string>Back</string>
      </property>
     </widget>
    </item>
@@ -106,13 +106,6 @@
        </property>
        <property name="text">
         <string>Departure</string>
-       </property>
-      </widget>
-     </item>
-     <item row="5" column="2">
-      <widget class="QPushButton" name="button_search">
-       <property name="text">
-        <string>Search</string>
        </property>
       </widget>
      </item>
@@ -187,14 +180,7 @@
        </property>
       </widget>
      </item>
-     <item row="6" column="2">
-      <widget class="QPushButton" name="buyButton">
-       <property name="text">
-        <string>BUY</string>
-       </property>
-      </widget>
-     </item>
-     <item row="6" column="0" colspan="2">
+     <item row="7" column="0" colspan="2">
       <widget class="QListWidget" name="listWidget_seats">
        <property name="sizePolicy">
         <sizepolicy hsizetype="Minimum" vsizetype="Expanding">
@@ -207,6 +193,30 @@
          <width>0</width>
          <height>0</height>
         </size>
+       </property>
+      </widget>
+     </item>
+     <item row="7" column="2">
+      <widget class="QPushButton" name="buyButton">
+       <property name="text">
+        <string>BUY</string>
+       </property>
+      </widget>
+     </item>
+     <item row="6" column="0" colspan="2">
+      <widget class="QLabel" name="label">
+       <property name="text">
+        <string>Выберете номерместа в салоне:</string>
+       </property>
+       <property name="alignment">
+        <set>Qt::AlignCenter</set>
+       </property>
+      </widget>
+     </item>
+     <item row="5" column="2" rowspan="2">
+      <widget class="QPushButton" name="button_search">
+       <property name="text">
+        <string>Search</string>
        </property>
       </widget>
      </item>

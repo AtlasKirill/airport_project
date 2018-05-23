@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS tariff (
 
 CREATE TABLE IF NOT EXISTS planes (
   plane_id   SERIAL PRIMARY KEY,
-  flight_id  INTEGER REFERENCES flights (flight_id),
+  flight_id  INTEGER REFERENCES flights (flight_id) UNIQUE,
   seats_num  SMALLINT DEFAULT 40,
   company    VARCHAR,
   plane_type VARCHAR(20)
@@ -21,8 +21,10 @@ CREATE TABLE IF NOT EXISTS seats (
 );
 
 CREATE TABLE IF NOT EXISTS occupancy (
-  seat_id INTEGER REFERENCES seats (seat_id) UNIQUE,
-  user_id INTEGER REFERENCES users (user_id)
+  seat_id   INTEGER REFERENCES seats (seat_id),
+  user_id   INTEGER REFERENCES users (user_id),
+  flight_id INTEGER REFERENCES flights (flight_id) ON DELETE CASCADE,
+  UNIQUE (seat_id, flight_id)
 );
 
 
@@ -37,10 +39,11 @@ CREATE TABLE IF NOT EXISTS flights (
 CREATE TABLE IF NOT EXISTS tickets (
   ticket_id SERIAL PRIMARY KEY,
   tariff_id INTEGER REFERENCES tariff (tariff_id),
-  seat_id   INTEGER REFERENCES seats (seat_id) UNIQUE,
+  seat_id   INTEGER REFERENCES seats (seat_id),
   plane_id  INTEGER REFERENCES planes (plane_id),
   flight_id INTEGER REFERENCES flights (flight_id),
-  user_id   INTEGER REFERENCES users (user_id)
+  user_id   INTEGER REFERENCES users (user_id),
+  UNIQUE (seat_id, flight_id)
 );
 ALTER TABLE public.tickets
   ADD CONSTRAINT tickets_id_flight_fkey
@@ -60,6 +63,7 @@ CREATE TABLE IF NOT EXISTS users (
 );
 
 CREATE TABLE IF NOT EXISTS logsForBudget (
+  log_id    SERIAL PRIMARY KEY,
   payment   INTEGER,
   flight_id INTEGER,
   plane_id  INTEGER,
@@ -67,9 +71,9 @@ CREATE TABLE IF NOT EXISTS logsForBudget (
   date      TIMESTAMP,
   tariff_id INTEGER
 );
-
+-- indexes
 CREATE INDEX idx_user_name
-  ON users (upper(login));
+  ON users (login);
 CREATE INDEX idx_flight_depart
   ON flights (departure, destination);
 
@@ -261,7 +265,7 @@ SELECT *
 FROM new_flight(3, 'Москва', 'Самара', '2018-05-09 02:45' :: TIMESTAMP);
 
 SELECT *
-FROM new_flight(30, 'Москва', 'Самара', '2018-05-09 17:00:00' :: TIMESTAMP);
+FROM new_flight(30, 'Москва', 'Ростов', '2018-05-09 21:15:00' :: TIMESTAMP);
 
 
 --Deleting flights
@@ -302,13 +306,9 @@ BEGIN
     RETURNING planes.plane_id
       INTO current_plane_id;
 
-    DELETE FROM occupancy
-    USING seats
-    WHERE seats.plane_id = current_plane_id AND seats.seat_id = occupancy.seat_id;
-
     DELETE FROM flights
     WHERE flights.flight_id =
-          current_flight_id; --Automatically deletes tickets if tickets.flught_id has constraint(delete on cascade)
+          current_flight_id; --Automatically deletes tickets AND occupancy if tickets.flight_id has constraint(delete on cascade)
 
     operation_status = TRUE;
     RETURN;
@@ -318,7 +318,7 @@ LANGUAGE plpgsql;
 
 -- Following query needs a constraint (delete on cascade) in flights foreign key in tickets table
 SELECT *
-FROM delete_flight(30, 'qqqq', 'qqqq', '2018-05-16 18:06:57' :: TIMESTAMP);
+FROM delete_flight(30, 'Москва', 'Ростов', '2018-05-09 21:15:00' :: TIMESTAMP);
 
 -- t_flight_descriptin needs in finction delete_flight_by_id
 CREATE TYPE T_FLIGHT_DESCRIPTION AS (depart VARCHAR, dest VARCHAR, flightDate TIMESTAMP );
@@ -360,7 +360,7 @@ SELECT *
 FROM delete_flight_by_id(30, 93);
 
 
--- Changing flights
+-- Changing flights (it doesn't need, we will simply create new flights )
 CREATE OR REPLACE FUNCTION change_flight(in_user_id       INTEGER,
                                          change_flight_id INTEGER,
                                          date             TIMESTAMP,
@@ -412,6 +412,7 @@ CREATE OR REPLACE FUNCTION replace_plane_flight(in_user_id       INTEGER,
                                                 change_flight_id INTEGER,
   OUT                                           operation_status BOOLEAN) AS $$
 DECLARE
+  prev_flight_id INTEGER;
 BEGIN
   IF isAdmin(in_user_id) IS NOT TRUE
   THEN
@@ -427,17 +428,20 @@ BEGIN
       operation_status = FALSE;
       RAISE EXCEPTION 'Exception: THERE ARE NO SUCH PLANE';
   END IF;
-
+  SELECT flight_id
+  FROM planes
+  WHERE plane_id = change_plane_id
+  INTO prev_flight_id;
   UPDATE planes
   SET flight_id = change_flight_id
   WHERE plane_id = change_plane_id;
 
-  DELETE FROM occupancy
-  USING seats
-  WHERE seats.plane_id = change_plane_id AND seats.seat_id = occupancy.seat_id;
+  --   DELETE FROM occupancy
+  --   USING seats
+  --   WHERE seats.plane_id = change_plane_id AND seats.seat_id = occupancy.seat_id;
 
   DELETE FROM tickets
-  WHERE flight_id = change_flight_id;
+  WHERE flight_id = prev_flight_id;
   operation_status = TRUE;
   RETURN;
 END;
@@ -453,7 +457,7 @@ FROM replace_plane_flight(20, 5, 1);
 CREATE OR REPLACE FUNCTION new_plane(in_user_id       INTEGER, corp VARCHAR,
                                      num_seat         INTEGER,
                                      type_of_plane    VARCHAR,
-                                     flight           INTEGER DEFAULT NULL,
+                                     flight           INTEGER,
   OUT                                operation_status BOOLEAN,
   OUT                                new_plane_id     INTEGER) AS $$
 BEGIN
@@ -535,7 +539,7 @@ BEGIN
   END IF;
   IF EXISTS(SELECT *
             FROM occupancy
-            WHERE seat_id = cur_seat_id)
+            WHERE seat_id = cur_seat_id AND flight_id = cur_flight_id)
   THEN
     operation_status = FALSE;
     RAISE EXCEPTION 'Exception: this seat is already occupied';
@@ -551,7 +555,7 @@ $$
 LANGUAGE plpgsql;
 
 SELECT *
-FROM buy_ticket(3, 3, 1, 32, 3);
+FROM buy_ticket(3, 110, 1, 38, 3);
 
 
 -- function that returns user's ticket
@@ -642,48 +646,50 @@ FROM current_time_by_flightDate('Москва', 'Ростов', 2018, 5, 9);
 
 
 -- show list of vacant seats in plane
-CREATE OR REPLACE FUNCTION list_of_free_seats(plane INTEGER)
+CREATE OR REPLACE FUNCTION list_of_free_seats(flight INTEGER)
   RETURNS TABLE(seat_id INTEGER, seat_num INTEGER) AS $$
 BEGIN
   RETURN QUERY SELECT
                  seats.seat_id,
                  seats.serial_number_in_plane
                FROM seats
-                 LEFT JOIN occupancy o ON seats.seat_id = o.seat_id
-               WHERE o.seat_id IS NULL AND plane_id = plane;
+                 LEFT JOIN occupancy o USING (seat_id)
+               WHERE o.seat_id IS NULL AND plane_id = (SELECT plane_id
+                                                       FROM planes
+                                                       WHERE planes.flight_id = flight);
 END;
 $$
 LANGUAGE plpgsql;
 
 SELECT *
-FROM list_of_free_seats(1);
+FROM list_of_free_seats(118);
 
--- --consistency of numeration of seats in the plane
--- CREATE TRIGGER t_seats_consistency
---   AFTER INSERT
---   ON seats
---   FOR EACH STATEMENT EXECUTE PROCEDURE seat_consist();
---
--- CREATE OR REPLACE FUNCTION seat_consist()
---   RETURNS TRIGGER AS $$
--- BEGIN
---   IF tg_op = 'INSERT'
---   THEN
---
---   END IF;
--- END;
--- $$
--- LANGUAGE plpgsql;
---
--- -- view that needs for consistency trigger
--- CREATE VIEW ordered_by_plane AS
---   SELECT *
---   FROM seats
---   GROUP BY plane_id
---   ORDER BY seat_id ASC;
---
--- SELECT *
--- FROM now();
+-- returns all information about user's ticket in an acceptable form
+CREATE OR REPLACE FUNCTION info_from_ticket(ticket INTEGER)
+  RETURNS TABLE(user_name TEXT, passport VARCHAR, direction TEXT, date TEXT,
+                seat_num  INTEGER, plane_company VARCHAR, food_and_luggage TEXT) AS $$
+BEGIN
+  RETURN QUERY SELECT
+                 u.name || ' ' || u.surname,
+                 u.passport_num,
+                 f.departure || '--->' || f.destination,
+                 f.flight_date :: DATE || ' ' || f.flight_date :: TIME,
+                 s.serial_number_in_plane,
+                 p.company,
+                 t2.food || ' and ' || t2.large_luggage
+               FROM tickets t
+                 LEFT JOIN users u ON t.user_id = u.user_id
+                 LEFT JOIN flights f ON t.flight_id = f.flight_id
+                 LEFT JOIN seats s ON t.seat_id = s.seat_id
+                 LEFT JOIN planes p ON t.plane_id = p.plane_id
+                 LEFT JOIN tariff t2 ON t.tariff_id = t2.tariff_id
+               WHERE ticket_id = ticket;
+END;
+$$
+LANGUAGE plpgsql;
+
+SELECT *
+FROM info_from_ticket(211);
 
 
 -- trigger for adding tickets and after into occupancy
@@ -698,7 +704,7 @@ DECLARE
 BEGIN
   IF tg_op = 'INSERT'
   THEN
-    INSERT INTO occupancy (seat_id, user_id) VALUES (NEW.seat_id, NEW.user_id);
+    INSERT INTO occupancy (seat_id, user_id, flight_id) VALUES (NEW.seat_id, NEW.user_id, NEW.flight_id);
     RETURN NEW;
   END IF;
 END;
@@ -719,7 +725,7 @@ BEGIN
   IF tg_op = 'DELETE'
   THEN
     DELETE FROM occupancy
-    WHERE occupancy.seat_id = OLD.seat_id;
+    WHERE occupancy.seat_id = OLD.seat_id AND occupancy.flight_id = OLD.flight_id;
     RETURN OLD;
   END IF;
 END;
@@ -728,9 +734,9 @@ LANGUAGE plpgsql;
 
 
 DELETE FROM tickets
-WHERE seat_id = 37;
+WHERE ticket_id = 114;
 
-INSERT INTO tickets (tariff_id, seat_id, plane_id, flight_id, user_id) VALUES (1, 37, 1, 3, 30);
+INSERT INTO tickets (tariff_id, seat_id, plane_id, flight_id, user_id) VALUES (1, 395, 16, 118, 30);
 
 
 -- adding plane cause adding seats referred to this plane
@@ -829,14 +835,12 @@ BEGIN
   INTO plane;
 
   IF amount > (SELECT count(*)
-               FROM seats
-                 INNER JOIN planes p USING (plane_id)
-               WHERE p.plane_id = plane)
+               FROM list_of_free_seats(flight))
   THEN
     RAISE EXCEPTION 'EXCEPTION: THIS AMOUNT OF TICKETS IS NOT AVAILABLE';
   END IF;
   FOR seat IN (SELECT seat_id
-               FROM list_of_free_seats(plane)
+               FROM list_of_free_seats(flight)
                LIMIT amount) LOOP
     INSERT INTO tickets (tariff_id, seat_id, plane_id, flight_id, user_id)
     VALUES (tariff, seat, plane, flight, userId);
@@ -846,7 +850,7 @@ $$
 LANGUAGE plpgsql;
 
 SELECT *
-FROM buyRangeOfTicket(30, 3, 1, 20);
+FROM buyRangeOfTicket(116, 3, 1, 16);
 
 
 CREATE TRIGGER t_add_to_logs
@@ -878,19 +882,82 @@ END;
 $$
 LANGUAGE plpgsql;
 
--- queries:
 
--- Просмотр дат рейсов с выбранным направлением
-SELECT concat(flight_date :: DATE, ' ', flight_date :: TIME)
+
+-- whole income for day on particular direction
+CREATE OR REPLACE FUNCTION income_in_direction(depart VARCHAR, dest VARCHAR)
+  RETURNS TABLE(date_time DATE, sum BIGINT, total BIGINT) AS $$
+BEGIN
+  RETURN QUERY SELECT DISTINCT
+                 logsForBudget.date :: DATE,
+                 sum(payment)
+                 OVER (
+                   PARTITION BY date :: DATE ),
+                 sum(payment)
+                 OVER ()
+               FROM logsForBudget
+               WHERE flight_id IN (SELECT flights.flight_id
+                                   FROM flights
+                                   WHERE departure = depart AND destination = dest) AND
+                     date_part('month', date) = date_part('month', now()) AND
+                     date_part('year', date) = date_part('year', now())
+               ORDER BY date :: DATE;
+END;
+$$
+LANGUAGE plpgsql;
+
+SELECT *
+FROM income_in_direction('Москва','Ростов');
+
+
+-- queries:
+-- editing user's info
+-- UPDATE ...
+
+-- query of flights with particular company
+SELECT
+  departure || '--->' || destination                    AS direction,
+  concat(flight_date :: DATE, ' ', flight_date :: TIME) AS date,
+  plane_type
+FROM flights
+  INNER JOIN planes USING (flight_id)
+WHERE company = 'Utair';
+
+--list of free seats at the particular flight
+SELECT *
+FROM list_of_free_seats(110);
+
+-- query of flights with particular direction
+SELECT
+  flights.departure || '--->' || flights.destination AS direction,
+  flight_date :: DATE || ' ' || flight_date :: TIME  AS date
 FROM flights
 WHERE departure = 'Москва' AND destination = 'Ростов';
 
 
--- SELECT
---   logsForBudget.date::date,
---   sum(payment) OVER (ORDER BY ),
---   FROM logsForBudget
+-- whole income for current day
+CREATE OR REPLACE VIEW income_for_cur_day AS
+  SELECT
+    row_number()
+    OVER (
+      ORDER BY log_id ),
+    concat(logsForBudget.date :: DATE, ' ', date :: TIME) AS date,
+    sum(payment)
+    OVER (
+      ORDER BY log_id )                                   AS income
+  FROM logsForBudget
+  WHERE logsForBudget.date :: DATE = now() :: DATE
+  ORDER BY log_id;
 
-
+-- income for every month
+CREATE OR REPLACE VIEW income_for_every_month AS
+  SELECT DISTINCT
+    date_part('month', date)                  AS month,
+    sum(payment)
+    OVER (
+      PARTITION BY date_part('month', date) ) AS month_income,
+    sum(payment)
+    OVER ()                                   AS TOTAL_year
+  FROM logsForBudget;
 
 

@@ -150,7 +150,7 @@
      <item row="7" column="0">
       <widget class="QPushButton" name="backButton">
        <property name="text">
-        <string>BACK</string>
+        <string>Back</string>
        </property>
       </widget>
      </item>
