@@ -7,7 +7,9 @@ import linecache
 
 from PyQt5.QtCore import Qt, QDateTime, QDate, QTimer, QTime
 from PyQt5.QtGui import QPalette, QImage, QBrush
+
 from PyQt5.QtWidgets import QApplication, QMessageBox
+
 from PyQt5 import uic
 import psycopg2
 import re
@@ -159,10 +161,23 @@ class RegistrationWindow(QRegistration):
             # end of creating
 
             self.parent().replace_with(ProfileWindow())
-
         except:
             ConnectionDB.connect.rollback()
             PrintException()
+
+    def keyPressEvent(self, event):
+        if self.ui.line_name.text() == "":
+            return
+        if self.ui.line_surname.text() == "":
+            return
+        if self.ui.line_passport.text() == "":
+            return
+        if self.ui.line_login.text() == "":
+            return
+        if self.ui.line_password.text() == "":
+            return
+        if event.key() == Qt.Key_Return:
+            self.__execute_sign()
 
     def keyPressEvent(self, event):
         if self.ui.line_name.text() == "":
@@ -247,7 +262,6 @@ class ChangeInfoWindow(QChangeInfo):
             ConnectionDB.cursor.execute(
                 """UPDATE users SET name = %s, surname=%s, login=%s, password=%s, passport_num=%s, phone_number=%s WHERE user_id=%s""",
                 (newName, newSurname, newLogin, newPassword, newPassport, newPhone, Current_User.user_id))
-
             ConnectionDB.connect.commit()
         except:
             ConnectionDB.connect.rollback()
@@ -485,6 +499,7 @@ class BuyTicketWindow(QBuyTicket):
         except:
             ConnectionDB.connect.rollback()
             PrintException()
+            
         self.ui.buyButton.clicked.disconnect()
         self.parent().replace_with(ProfileWindow())
 
@@ -598,7 +613,7 @@ class AdminWindow(QAdmin):
         except:
             ConnectionDB.connect.rollback()
             PrintException()
-
+        
         self.ui.line_depart.setText("")
         self.ui.line_dest.setText("")
 
@@ -634,7 +649,7 @@ class AdminWindow(QAdmin):
         except:
             ConnectionDB.connect.rollback()
             PrintException()
-
+        
         self.ui.line_depart.setText("")
         self.ui.line_dest.setText("")
 
@@ -701,6 +716,7 @@ class AdminWindow(QAdmin):
         except:
             ConnectionDB.connect.rollback()
             PrintException()
+        
         flightDateLine = QDateTime(current_flight_date[0],
                                    current_flight_date[1],
                                    current_flight_date[2],
@@ -712,7 +728,7 @@ class AdminWindow(QAdmin):
 
     def __del__(self):
         self.ui = None
-
+        
 
 class Ticket():
     def __init__(self):
@@ -745,6 +761,20 @@ class ConnectionDatabase():
         except:
             ConnectionDB.connect.rollback()
             PrintException()
+
+    def __del__(self):
+        self.cursor.close()
+        self.connect.close()
+
+
+class ConnectionDatabase():
+    def __init__(self):
+        try:
+            self.connect = psycopg2.connect(database='db_project', user='kirill', host='localhost', password='25112458')
+            self.cursor = self.connect.cursor()
+        except Exception as e:
+            self.connect.rollback()
+            print(e)
 
     def __del__(self):
         self.cursor.close()
