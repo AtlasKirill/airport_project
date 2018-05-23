@@ -7,7 +7,9 @@ import linecache
 
 from PyQt5.QtCore import Qt, QDateTime, QDate, QTimer, QTime
 from PyQt5.QtGui import QPalette, QImage, QBrush
-from PyQt5.QtWidgets import QApplication, QMessageBox, QTabWidget
+
+from PyQt5.QtWidgets import QApplication, QMessageBox
+
 from PyQt5 import uic
 import psycopg2
 import re
@@ -104,19 +106,23 @@ class ProfileWindow(QProfile):
         self.ui.label_phone.setText(Current_User.phone_number if Current_User.phone_number != "" else "[No data]")
 
         # combobox: watch a list of bought tickets
-        ConnectionDB.cursor.execute(
-            """SELECT ticket_id, departure,destination FROM flights LEFT JOIN tickets USING (flight_id) WHERE user_id=%s""",
-            (Current_User.user_id,))
-        tick_inf = ConnectionDB.cursor.fetchall()
-        for ticket_info in tick_inf:
-            self.ui.comboBox_tickets.addItem(str(ticket_info[0]) + ": " + str(ticket_info[1]) +
-                                             " -> " + str(ticket_info[2]))
+        try:
+            ConnectionDB.cursor.execute(
+                """SELECT ticket_id, departure,destination FROM flights LEFT JOIN tickets USING (flight_id) WHERE user_id=%s""",
+                (Current_User.user_id,))
+            tick_inf = ConnectionDB.cursor.fetchall()
+            for ticket_info in tick_inf:
+                self.ui.comboBox_tickets.addItem(str(ticket_info[0]) + ": " + str(ticket_info[1]) +
+                                                 " -> " + str(ticket_info[2]))
 
-        self.ui.comboBox_tickets.activated[str].connect(self.show_ticket)
+            self.ui.comboBox_tickets.activated[str].connect(self.show_ticket)
+        except:
+            ConnectionDB.connect.rollback()
+            PrintException()
 
     def show_ticket(self, text):
         text = re.sub(r':.*', '', text)
-        Current_Ticket.set(int(text))
+        Current_Ticket.set_ticket_id(int(text))
         self.parent().replace_with(TicketWindow())
 
     def __del__(self):
@@ -154,10 +160,23 @@ class RegistrationWindow(QRegistration):
             # end of creating
 
             self.parent().replace_with(ProfileWindow())
-
-        except Exception as e:
+        except:
             ConnectionDB.connect.rollback()
-            print(e)
+            PrintException()
+
+    def keyPressEvent(self, event):
+        if self.ui.line_name.text() == "":
+            return
+        if self.ui.line_surname.text() == "":
+            return
+        if self.ui.line_passport.text() == "":
+            return
+        if self.ui.line_login.text() == "":
+            return
+        if self.ui.line_password.text() == "":
+            return
+        if event.key() == Qt.Key_Return:
+            self.__execute_sign()
 
     def keyPressEvent(self, event):
         if self.ui.line_name.text() == "":
@@ -188,7 +207,6 @@ class MainWindow(QMainWindow):
         scaled = img.scaled(self.size(), Qt.KeepAspectRatioByExpanding, transformMode=Qt.SmoothTransformation)
         palette.setBrush(QPalette.Window, QBrush(scaled))
         self.setPalette(palette)
-        # self.show()
 
         # переходим на окно log in
         self.current_widget = LogInWindow()
@@ -243,11 +261,11 @@ class ChangeInfoWindow(QChangeInfo):
             ConnectionDB.cursor.execute(
                 """UPDATE users SET name = %s, surname=%s, login=%s, password=%s, passport_num=%s, phone_number=%s WHERE user_id=%s""",
                 (newName, newSurname, newLogin, newPassword, newPassport, newPhone, Current_User.user_id))
-
             ConnectionDB.connect.commit()
-        except Exception as e:
+        except:
             ConnectionDB.connect.rollback()
-            print(e)
+            PrintException()
+
         # Modify user in current session
         Current_User.set((Current_User.user_id, newName, newSurname, newLogin, "user", newPassport, newPhone,
                           newPassword))
@@ -298,9 +316,9 @@ class TicketWindow(QTicket):
             ConnectionDB.cursor.execute("""SELECT price, large_luggage, food FROM tariff WHERE tariff_id = %s""",
                                         (ticket[3],))
             tariff = ConnectionDB.cursor.fetchone()
-        except Exception as e:
+        except:
             ConnectionDB.connect.rollback()
-            print(e)
+            PrintException()
 
         # putting info into window
         outDeparture = self.ui.departure
@@ -331,9 +349,13 @@ class TicketWindow(QTicket):
         self.ui.returnTicket.clicked.connect(self.returnTick)
 
     def returnTick(self):
-        ConnectionDB.cursor.execute("""SELECT * FROM return_ticket(%s,%s)""",
-                                    (Current_User.user_id, Current_Ticket.ticket_id))
-        ConnectionDB.connect.commit()
+        try:
+            ConnectionDB.cursor.execute("""SELECT * FROM return_ticket(%s,%s)""",
+                                        (Current_User.user_id, Current_Ticket.ticket_id))
+            ConnectionDB.connect.commit()
+        except:
+            ConnectionDB.connect.rollback()
+            PrintException()
         self.parent().replace_with(ProfileWindow())
 
     def __del__(self):
@@ -348,7 +370,6 @@ class BuyTicketWindow(QBuyTicket):
 
         self.luggage_flag = False
         self.food_flag = False
-        self.time = ""
         self.time_is_selected = False
 
         # buttons
@@ -366,21 +387,25 @@ class BuyTicketWindow(QBuyTicket):
         self.ui.date_label.setText(date)
 
         # init comboboxes
-        ConnectionDB.cursor.execute("SELECT DISTINCT departure from flights")
-        result = ConnectionDB.cursor.fetchall()
-        for departure in result:
-            self.ui.comboBox_departure.addItem(str(departure[0]))
-        self.ui.comboBox_departure.setCurrentIndex(0)
-        Ticket_tb.departure = result[0][0]
-        self.ui.comboBox_departure.activated[str].connect(Ticket_tb.set_departure)
+        try:
+            ConnectionDB.cursor.execute("SELECT DISTINCT departure from flights")
+            result = ConnectionDB.cursor.fetchall()
+            for departure in result:
+                self.ui.comboBox_departure.addItem(str(departure[0]))
+            self.ui.comboBox_departure.setCurrentIndex(0)
+            Ticket_tb.departure = result[0][0]
+            self.ui.comboBox_departure.activated[str].connect(Ticket_tb.set_departure)
 
-        ConnectionDB.cursor.execute("SELECT DISTINCT destination from flights")
-        result = ConnectionDB.cursor.fetchall()
-        for destination in result:
-            self.ui.comboBox_destination.addItem(str(destination[0]))
-        self.ui.comboBox_destination.setCurrentIndex(0)
-        Ticket_tb.destination = result[0][0]
-        self.ui.comboBox_destination.activated[str].connect(Ticket_tb.set_destination)
+            ConnectionDB.cursor.execute("SELECT DISTINCT destination from flights")
+            result = ConnectionDB.cursor.fetchall()
+            for destination in result:
+                self.ui.comboBox_destination.addItem(str(destination[0]))
+            self.ui.comboBox_destination.setCurrentIndex(0)
+            Ticket_tb.destination = result[0][0]
+            self.ui.comboBox_destination.activated[str].connect(Ticket_tb.set_destination)
+        except:
+            ConnectionDB.connect.rollback()
+            PrintException()
 
         # add options
         self.ui.checkBox_luggage.toggled.connect(self.set_tariff)
@@ -408,20 +433,30 @@ class BuyTicketWindow(QBuyTicket):
 
     def search_time(self, date_):
         if len(self.time_list):
-            self.time_list = self.time_list.clear()
+            self.time_list.clear()
             self.time_list = []
         self.ui.listWidget_times.clear()
         Ticket_tb.set_date(date_)
-        ConnectionDB.cursor.execute("""SELECT * from current_time_by_flightDate (%s,%s,%s,%s,%s)""",
-                                    (Ticket_tb.departure, Ticket_tb.destination, Ticket_tb.year, Ticket_tb.month,
-                                     Ticket_tb.day))
+        try:
+            ConnectionDB.cursor.execute("""SELECT * from current_time_by_flightDate (%s,%s,%s,%s,%s)""",
+                                        (Ticket_tb.departure, Ticket_tb.destination, Ticket_tb.year, Ticket_tb.month,
+                                         Ticket_tb.day))
 
-        # если ответ пустой -- ответная реакция
-        result = ConnectionDB.cursor.fetchall()
-        for time_info in result:
-            # time_info[0] ---- flight_id
-            self.time_list.append(time_info[0])
-            self.ui.listWidget_times.addItem(str(int(time_info[1])) + ":" + str(int(time_info[2])))
+            # если ответ пустой -- ответная реакция
+            result = ConnectionDB.cursor.fetchall()
+            for time_info in result:
+                # time_info[0] ---- flight_id
+                self.time_list.append(time_info[0])
+                hours = str(int(time_info[1]))
+                mins = str(int(time_info[2]))
+                if len(hours) < 2:
+                    hours = '0' + hours
+                if len(mins) < 2:
+                    mins = '0' + mins
+                self.ui.listWidget_times.addItem(hours + ":" + mins)
+        except:
+            ConnectionDB.connect.rollback()
+            PrintException()
 
     def set_flightId_by_time(self):
         Ticket_tb.flight_id = self.time_list[self.ui.listWidget_times.currentRow()]
@@ -435,32 +470,35 @@ class BuyTicketWindow(QBuyTicket):
                 ErrorMessage('Error', 'Departure and destination should be different')
             else:
                 self.seats_id.clear()
-                ConnectionDB.cursor.execute(
-                    """SELECT * from list_of_free_seats((SELECT flight_id FROM planes WHERE flight_id=%s))""",
-                    (Ticket_tb.flight_id,))
-                self.ui.listWidget_seats.clear()
-                result = ConnectionDB.cursor.fetchall()
-                for seats in result:
-                    self.seats_id.append(seats[0])
-                    self.ui.listWidget_seats.addItem(str(seats[1]))
+                try:
+                    ConnectionDB.cursor.execute(
+                        """SELECT * from list_of_free_seats((SELECT flight_id FROM planes WHERE flight_id=%s))""",
+                        (Ticket_tb.flight_id,))
+                    self.ui.listWidget_seats.clear()
+                    result = ConnectionDB.cursor.fetchall()
+                    for seats in result:
+                        self.seats_id.append(seats[0])
+                        self.ui.listWidget_seats.addItem(str(seats[1]))
+                except:
+                    ConnectionDB.connect.rollback()
+                    PrintException()
 
     def set_seat(self):
         Ticket_tb.seat_id = self.seats_id[self.ui.listWidget_seats.currentRow()]
         self.ui.buyButton.clicked.connect(self.buyTicket)
 
     def buyTicket(self):
-
         try:
             ConnectionDB.cursor.execute(
-                """SELECT * FROM buy_ticket (%s,%s,(SELECT plane_id FROM planes WHERE flight_id = %s),%s,(SELECT tariff_id FROM tariff WHERE large_luggage = %s AND food = %s))""",
-                (
-                    Current_User.user_id, Ticket_tb.flight_id, Ticket_tb.flight_id, Ticket_tb.seat_id,
+                """SELECT * FROM buy_ticket (%s,%s,(SELECT plane_id FROM planes WHERE flight_id = %s),%s,
+                    (SELECT tariff_id FROM tariff WHERE large_luggage = %s AND food = %s))""",
+                    (Current_User.user_id, Ticket_tb.flight_id, Ticket_tb.flight_id, Ticket_tb.seat_id,
                     self.luggage_flag, self.food_flag))
             ConnectionDB.connect.commit()
-        except Exception as e:
+        except:
             ConnectionDB.connect.rollback()
-            print(e)
-
+            PrintException()
+            
         self.ui.buyButton.clicked.disconnect()
         self.parent().replace_with(ProfileWindow())
 
@@ -534,9 +572,9 @@ class AdminWindow(QAdmin):
             for user in ConnectionDB.cursor.fetchall():
                 self.ui.userField.addItem(str(user[0]) + " " + str(user[1]))
                 self.user_ids.append(user[2])
-        except Exception as e:
+        except:
             ConnectionDB.connect.rollback()
-            print(e)
+            PrintException()
 
     def ticket_userInfo_Field_fill(self):
         Current_User.user_id = self.user_ids[self.ui.userField.currentRow()]
@@ -559,9 +597,9 @@ class AdminWindow(QAdmin):
             params = ['name: ', 'surname: ', 'passport: ', 'login: ', 'phone: ']
             for result in zip(params, ConnectionDB.cursor.fetchone()):
                 self.ui.userInfo.addItem(str(result[0]) + str(result[1]))
-        except Exception as e:
+        except:
             ConnectionDB.connect.rollback()
-            print(e)
+            PrintException()
 
     def infoTabs(self):
         try:
@@ -574,9 +612,9 @@ class AdminWindow(QAdmin):
             params = ['direction: ', 'date: ', 'seat: ', 'Air company: ', 'food/luggage: ']
             for result in zip(params, ConnectionDB.cursor.fetchone()):
                 self.ui.ticketInfo.addItem(str(result[0]) + str(result[1]))
-        except Exception as e:
+        except:
             ConnectionDB.connect.rollback()
-            print(e)
+            PrintException()
 
     def flight_field_fill(self):
         try:
@@ -584,9 +622,9 @@ class AdminWindow(QAdmin):
             for flight in ConnectionDB.cursor.fetchall():
                 self.ui.flight_field.addItem(str(flight[0]) + " ---> " + str(flight[1]))
                 self.flight_ids.append(flight[2])
-        except Exception as e:
+        except:
             ConnectionDB.connect.rollback()
-            print(e)
+            PrintException()
 
     def delButton(self):
         try:
@@ -599,9 +637,10 @@ class AdminWindow(QAdmin):
 
             item = self.ui.flight_field.takeItem(self.ui.flight_field.currentRow())
             self.flight_ids.remove(cur_flight_id)
-        except Exception as e:
+        except:
             ConnectionDB.connect.rollback()
-            print(e)
+            PrintException()
+        
         self.ui.line_depart.setText("")
         self.ui.line_dest.setText("")
 
@@ -634,10 +673,10 @@ class AdminWindow(QAdmin):
             #  response return flight_id
             response = ConnectionDB.cursor.fetchone()
             new_flight_id = response[1]
-        except Exception as e:
+        except:
             ConnectionDB.connect.rollback()
-            print(e)
-
+            PrintException()
+        
         self.ui.line_depart.setText("")
         self.ui.line_dest.setText("")
 
@@ -647,10 +686,9 @@ class AdminWindow(QAdmin):
             flight = ConnectionDB.cursor.fetchone()
             self.ui.flight_field.addItem(str(flight[0]) + " ---> " + str(flight[1]))
             self.flight_ids.append(new_flight_id)
-
-        except Exception as e:
+        except:
             ConnectionDB.connect.rollback()
-            print(e)
+            PrintException()
 
         self.ui.buttonEdit.clicked.disconnect()
         self.ui.buttonEdit.clicked.connect(self.flight_edit)
@@ -684,9 +722,9 @@ class AdminWindow(QAdmin):
             flight = ConnectionDB.cursor.fetchone()
             cur_item = self.ui.flight_field.currentItem()
             cur_item.setText(str(flight[0]) + " ---> " + str(flight[1]))
-        except Exception as e:
+        except:
             ConnectionDB.connect.rollback()
-            print(e)
+            PrintException()
 
     def flight_show_in_lineEdit(self):
         self.ui.buttonEdit.setText("Edit")
@@ -702,9 +740,10 @@ class AdminWindow(QAdmin):
             ConnectionDB.cursor.execute("""SELECT * FROM current_flaight_date(%s)""",
                                         (self.flight_ids[self.ui.flight_field.currentRow()],))
             current_flight_date = ConnectionDB.cursor.fetchone()
-        except Exception as e:
+        except:
             ConnectionDB.connect.rollback()
-            print(e)
+            PrintException()
+        
         flightDateLine = QDateTime(current_flight_date[0],
                                    current_flight_date[1],
                                    current_flight_date[2],
@@ -716,20 +755,20 @@ class AdminWindow(QAdmin):
 
     def __del__(self):
         self.ui = None
+        
 
-
-class TicketToBuy():
+class Ticket():
     def __init__(self):
+        self.ticket_id = None
         self.flight_id = None
-        self.ticket_id = None  # ?
-        self.seat_id = None  # ?
-        self.plane_id = None  # ?
+        self.seat_id = None
         self.user_id = Current_User.user_id
         self.year, self.month, self.day = QDate.currentDate().getDate()
         self.departure = ""
         self.destination = ""
-        self.seats_num = None
-        self.company = ""
+
+    def set_ticket_id(self, ticket=None):
+        self.ticket_id = ticket
 
     def set_date(self, date_):
         self.year, self.month, self.day = date_.getDate()
@@ -741,12 +780,18 @@ class TicketToBuy():
         self.destination = destination_
 
 
-class Ticket():
+class ConnectionDatabase():
     def __init__(self):
-        self.ticket_id = None
+        try:
+            self.connect = psycopg2.connect(database='ticket1', user='liliya', host='localhost', password='1')
+            self.cursor = self.connect.cursor()
+        except:
+            ConnectionDB.connect.rollback()
+            PrintException()
 
-    def set(self, ticket=None):
-        self.ticket_id = ticket
+    def __del__(self):
+        self.cursor.close()
+        self.connect.close()
 
 
 class ConnectionDatabase():
@@ -801,12 +846,11 @@ if __name__ == '__main__':
     Current_User = User()
     global Current_Ticket
     Current_Ticket = Ticket()
+    global Ticket_tb
+    Ticket_tb = Ticket()
     # database connection
     global ConnectionDB
     ConnectionDB = ConnectionDatabase()
-
-    global Ticket_tb
-    Ticket_tb = TicketToBuy()
 
     app = QApplication(sys.argv)
     # создаем окно
