@@ -207,7 +207,6 @@
       <widget class="QLabel" name="label">
        <property name="text">
         <string>Выберете номер места в салоне:</string>
-
        </property>
        <property name="alignment">
         <set>Qt::AlignCenter</set>

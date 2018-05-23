@@ -73,7 +73,6 @@ class LogInWindow(QLogIn):
             else:
                 self.parent().replace_with(ProfileWindow())
 
-        # except Exception as e:
         except:
             ConnectionDB.connect.rollback()
             PrintException()
@@ -520,6 +519,7 @@ class AdminWindow(QAdmin):
         self.flight_ids = []
         self.ticket_ids = []
         self.user_ids = []
+        self.plane_ids = []
 
         self.userField_fill()
         self.flight_field_fill()
@@ -538,6 +538,33 @@ class AdminWindow(QAdmin):
         self.ui.backButton.clicked.connect(lambda: self.parent().replace_with(LogInWindow()))
         self.ui.adminLogin.setText("You are: " + str(Current_User.login))
         # flight admin mode
+
+        # plane admin mode
+        self.ui.plane_field.itemClicked.connect(self.planeInfo_field_fill())
+        # plane admin mode
+
+    def planeField_fill(self):
+        try:
+            ConnectionDB.cursor.execute("""SELECT plane_id, plane_type FROM planes""")
+            for result in ConnectionDB.cursor.fetchall():
+                self.plane_ids.append(result[0])
+                self.ui.plane_field.addItem(str(result[0]) + ": " + str(result[1]))
+        except Exception as e:
+            ConnectionDB.connect.rollback()
+            print(e)
+
+    def planeInfo_field_fill(self):
+        plane_id = self.plane_ids[self.ui.plane_field.currentRow()]
+        try:
+            ConnectionDB.cursor.execute(
+                """SELECT plane_type, seats_num, company, departure||'--->'|| destination as direction FROM planes INNER JOIN flights USING (flight_id) WHERE plane_id=%s""",
+                (plane_id,))
+            params = ['Plane type: ', 'Number of seats: ', 'Air company: ', 'Direction: ']
+            for result in zip(params, ConnectionDB.cursor.fetchone()):
+                self.ui.plane_info.addItem(str(result[0]) + str(result[1]))
+        except Exception as e:
+            ConnectionDB.connect.rollback()
+            print(e)
 
     def userField_fill(self):
         try:
@@ -582,7 +609,7 @@ class AdminWindow(QAdmin):
             ConnectionDB.cursor.execute(
                 """SELECT direction, date, seat_num, plane_company, food_and_luggage FROM info_from_ticket(%s)""",
                 (Current_Ticket.ticket_id,))
-            params = ['direction: ', 'date: ','seat: ', 'Air company: ', 'food/luggage: ']
+            params = ['direction: ', 'date: ', 'seat: ', 'Air company: ', 'food/luggage: ']
             for result in zip(params, ConnectionDB.cursor.fetchone()):
                 self.ui.ticketInfo.addItem(str(result[0]) + str(result[1]))
         except:
