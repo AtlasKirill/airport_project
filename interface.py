@@ -523,7 +523,7 @@ class AdminWindow(QAdmin):
 
         self.userField_fill()
         self.flight_field_fill()
-        self.planeField_fill()
+        # self.planeField_fill()
 
         # user admin mode
         self.ui.userField.itemClicked.connect(self.ticket_userInfo_Field_fill)
@@ -540,31 +540,31 @@ class AdminWindow(QAdmin):
         # flight admin mode
 
         # plane admin mode
-        self.ui.plane_field.itemClicked.connect(self.planeInfo_field_fill())
+        # self.ui.plane_field.itemClicked.connect(self.planeInfo_field_fill())
         # plane admin mode
 
-    def planeField_fill(self):
-        try:
-            ConnectionDB.cursor.execute("""SELECT plane_id, plane_type FROM planes""")
-            for result in ConnectionDB.cursor.fetchall():
-                self.plane_ids.append(result[0])
-                self.ui.plane_field.addItem(str(result[0]) + ": " + str(result[1]))
-        except Exception as e:
-            ConnectionDB.connect.rollback()
-            print(e)
-
-    def planeInfo_field_fill(self):
-        plane_id = self.plane_ids[self.ui.plane_field.currentRow()]
-        try:
-            ConnectionDB.cursor.execute(
-                """SELECT plane_type, seats_num, company, departure||'--->'|| destination as direction FROM planes INNER JOIN flights USING (flight_id) WHERE plane_id=%s""",
-                (plane_id,))
-            params = ['Plane type: ', 'Number of seats: ', 'Air company: ', 'Direction: ']
-            for result in zip(params, ConnectionDB.cursor.fetchone()):
-                self.ui.plane_info.addItem(str(result[0]) + str(result[1]))
-        except Exception as e:
-            ConnectionDB.connect.rollback()
-            print(e)
+    # def planeField_fill(self):
+    #     try:
+    #         ConnectionDB.cursor.execute("""SELECT plane_id, plane_type FROM planes""")
+    #         for result in ConnectionDB.cursor.fetchall():
+    #             self.plane_ids.append(result[0])
+    #             self.ui.plane_field.addItem(str(result[0]) + ": " + str(result[1]))
+    #     except Exception as e:
+    #         ConnectionDB.connect.rollback()
+    #         print(e)
+    #
+    # def planeInfo_field_fill(self):
+    #     plane_id = self.plane_ids[self.ui.plane_field.currentRow()]
+    #     try:
+    #         ConnectionDB.cursor.execute(
+    #             """SELECT plane_type, seats_num, company, departure||'--->'|| destination as direction FROM planes INNER JOIN flights USING (flight_id) WHERE plane_id=%s""",
+    #             (plane_id,))
+    #         params = ['Plane type: ', 'Number of seats: ', 'Air company: ', 'Direction: ']
+    #         for result in zip(params, ConnectionDB.cursor.fetchone()):
+    #             self.ui.plane_info.addItem(str(result[0]) + str(result[1]))
+    #     except Exception as e:
+    #         ConnectionDB.connect.rollback()
+    #         print(e)
 
     def userField_fill(self):
         try:
